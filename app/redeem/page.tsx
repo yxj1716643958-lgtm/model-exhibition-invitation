@@ -20,8 +20,21 @@ function RedeemPageContent() {
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<RedeemResult | null>(null)
   const [isScanning, setIsScanning] = useState(false)
-  const videoRef = useRef<HTMLVideoElement>(null)
   const [scannerError, setScannerError] = useState<string | null>(null)
+  const readerRef = useRef<BrowserMultiFormatReader | null>(null)
+
+  // 清理扫码器
+  useEffect(() => {
+    return () => {
+      if (readerRef.current) {
+        try {
+          readerRef.current.reset()
+        } catch (e) {
+          console.error('清理扫码器失败:', e)
+        }
+      }
+    }
+  }, [])
 
   // 手动核销
   const handleRedeem = async (e?: FormEvent) => {
@@ -63,9 +76,13 @@ function RedeemPageContent() {
   const startScanning = async () => {
     setIsScanning(true)
     setScannerError(null)
+    setResult(null)
 
     try {
+      // 创建新的扫码器实例
       const reader = new BrowserMultiFormatReader()
+      readerRef.current = reader
+
       const videoInputDevices = await reader.listVideoInputDevices()
 
       if (videoInputDevices.length === 0) {
@@ -74,7 +91,9 @@ function RedeemPageContent() {
         return
       }
 
-      // 使用第一个摄像头
+      console.log('检测到摄像头设备:', videoInputDevices.length)
+
+      // 使用第一个摄像头（通常是后置摄像头）
       const selectedDeviceId = videoInputDevices[0].deviceId
 
       await reader.decodeFromVideoDevice(
@@ -83,28 +102,42 @@ function RedeemPageContent() {
         (result, error) => {
           if (result) {
             const code = result.getText()
+            console.log('扫描到码:', code)
             setVerificationCode(code)
             // 自动提交核销
             setTimeout(() => {
               handleRedeem()
-            }, 500)
+            }, 300)
           }
-          if (error && error.name !== 'NotFoundException') {
-            console.error('扫码错误:', error)
+          if (error) {
+            if (error.name === 'NotFoundException') {
+              // 正常情况，没有找到二维码
+            } else {
+              console.error('扫码错误:', error)
+              setScannerError(`扫码错误: ${error.message}`)
+            }
           }
         }
       )
     } catch (error) {
       console.error('启动扫码失败:', error)
-      setScannerError('启动摄像头失败，请检查权限设置')
+      setScannerError('启动摄像头失败，请检查权限设置或使用HTTPS访问')
       setIsScanning(false)
     }
   }
 
   // 停止扫码
   const stopScanning = () => {
+    if (readerRef.current) {
+      try {
+        readerRef.current.reset()
+      } catch (e) {
+        console.error('停止扫码失败:', e)
+      }
+      readerRef.current = null
+    }
     setIsScanning(false)
-    // 页面刷新会停止扫码
+    setScannerError(null)
   }
 
   // 清除结果
@@ -174,11 +207,11 @@ function RedeemPageContent() {
             <div className="mt-4">
               <div className="relative bg-black rounded-lg overflow-hidden" style={{ aspectRatio: '1' }}>
                 <video
-                  ref={videoRef}
                   id="video"
                   className="w-full h-full object-cover"
                   autoPlay
                   playsInline
+                  muted
                 />
                 {/* 扫码框 */}
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
