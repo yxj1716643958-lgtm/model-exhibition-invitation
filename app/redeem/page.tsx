@@ -22,6 +22,8 @@ function RedeemPageContent() {
   const [isScanning, setIsScanning] = useState(false)
   const [scannerError, setScannerError] = useState<string | null>(null)
   const readerRef = useRef<BrowserMultiFormatReader | null>(null)
+  const [videoDevices, setVideoDevices] = useState<MediaDeviceInfo[]>([])
+  const [currentDeviceIndex, setCurrentDeviceIndex] = useState(0)
 
   // 清理扫码器
   useEffect(() => {
@@ -84,6 +86,7 @@ function RedeemPageContent() {
       readerRef.current = reader
 
       const videoInputDevices = await reader.listVideoInputDevices()
+      setVideoDevices(videoInputDevices)
 
       if (videoInputDevices.length === 0) {
         setScannerError('未检测到摄像头设备')
@@ -93,8 +96,8 @@ function RedeemPageContent() {
 
       console.log('检测到摄像头设备:', videoInputDevices.length)
 
-      // 使用第一个摄像头（通常是后置摄像头）
-      const selectedDeviceId = videoInputDevices[0].deviceId
+      // 使用当前选中的摄像头
+      const selectedDeviceId = videoInputDevices[currentDeviceIndex]?.deviceId || videoInputDevices[0].deviceId
 
       await reader.decodeFromVideoDevice(
         selectedDeviceId,
@@ -138,6 +141,55 @@ function RedeemPageContent() {
     }
     setIsScanning(false)
     setScannerError(null)
+    setVideoDevices([])
+    setCurrentDeviceIndex(0)
+  }
+
+  // 切换摄像头
+  const switchCamera = async () => {
+    if (videoDevices.length <= 1) return
+
+    // 停止当前扫码
+    if (readerRef.current) {
+      try {
+        readerRef.current.reset()
+      } catch (e) {
+        console.error('停止扫码失败:', e)
+      }
+    }
+
+    // 切换到下一个摄像头
+    const nextIndex = (currentDeviceIndex + 1) % videoDevices.length
+    setCurrentDeviceIndex(nextIndex)
+
+    // 重新启动扫码
+    try {
+      const reader = readerRef.current || new BrowserMultiFormatReader()
+      readerRef.current = reader
+
+      const selectedDeviceId = videoDevices[nextIndex].deviceId
+
+      await reader.decodeFromVideoDevice(
+        selectedDeviceId,
+        'video',
+        (result, error) => {
+          if (result) {
+            const code = result.getText()
+            console.log('扫描到码:', code)
+            setVerificationCode(code)
+            setTimeout(() => {
+              handleRedeem()
+            }, 300)
+          }
+          if (error && error.name !== 'NotFoundException') {
+            console.error('扫码错误:', error)
+          }
+        }
+      )
+    } catch (error) {
+      console.error('切换摄像头失败:', error)
+      setScannerError('切换摄像头失败')
+    }
   }
 
   // 清除结果
@@ -222,12 +274,30 @@ function RedeemPageContent() {
                     <div className="absolute bottom-0 right-0 w-8 h-8 border-b-4 border-r-4 border-green-500 -mb-1 -mr-1"></div>
                   </div>
                 </div>
+                {/* 切换摄像头按钮 */}
+                {videoDevices.length > 1 && (
+                  <button
+                    onClick={switchCamera}
+                    className="absolute top-4 right-4 bg-white bg-opacity-90 text-gray-800 p-3 rounded-full shadow-lg hover:bg-opacity-100 transition"
+                    title="切换摄像头"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                  </button>
+                )}
                 <div className="absolute bottom-4 left-0 right-0 text-center">
                   <span className="bg-black bg-opacity-70 text-white px-4 py-2 rounded-full text-sm">
                     将二维码放入框内即可自动扫描
                   </span>
                 </div>
               </div>
+              {/* 摄像头指示 */}
+              {videoDevices.length > 1 && (
+                <div className="mt-2 text-center text-sm text-gray-600">
+                  当前使用: {currentDeviceIndex === 0 ? '后置摄像头' : '前置摄像头'} ({currentDeviceIndex + 1}/{videoDevices.length})
+                </div>
+              )}
             </div>
           )}
         </div>
