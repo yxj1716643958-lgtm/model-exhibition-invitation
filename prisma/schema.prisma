@@ -1,0 +1,30 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Ticket {
+  id               String    @id @default(cuid())
+  name             String
+  phone            String
+  email            String?
+  organization     String?   // 企业/学校
+  idCard           String?   // 身份证号
+  companions       String?   // 随行人员（多个用逗号分隔）
+  status           String    @default("PENDING") // PENDING, APPROVED, REJECTED
+  verificationCode String?   @unique
+  isRedeemed       Boolean   @default(false)
+  redeemedAt       DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  reviewedAt       DateTime?
+  reviewedBy       String?
+  rejectReason     String?
+}
