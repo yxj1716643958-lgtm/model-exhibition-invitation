@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { PasswordGuard } from '@/components/PasswordGuard'
+import * as XLSX from 'xlsx'
 
 type TicketStatus = 'PENDING' | 'APPROVED' | 'REJECTED'
 
@@ -100,6 +101,59 @@ function AdminPageContent() {
     )
   }
 
+  // 导出Excel
+  const exportToExcel = () => {
+    if (filteredTickets.length === 0) {
+      alert('没有数据可导出')
+      return
+    }
+
+    // 准备导出数据
+    const exportData = filteredTickets.map(ticket => ({
+      '姓名': ticket.name,
+      '手机号': ticket.phone,
+      '邮箱': ticket.email || '',
+      '企业/学校': ticket.organization || '',
+      '身份证号': ticket.idCard || '',
+      '随行人员': ticket.companions || '',
+      '状态': ticket.status === 'PENDING' ? '待审核' : ticket.status === 'APPROVED' ? '已通过' : '已拒绝',
+      '申请时间': new Date(ticket.createdAt).toLocaleString('zh-CN'),
+      '审核时间': ticket.reviewedAt ? new Date(ticket.reviewedAt).toLocaleString('zh-CN') : '',
+      '审核员': ticket.reviewedBy || ''
+    }))
+
+    // 创建工作表
+    const ws = XLSX.utils.json_to_sheet(exportData)
+
+    // 设置列宽
+    const colWidths = [
+      { wch: 12 }, // 姓名
+      { wch: 15 }, // 手机号
+      { wch: 25 }, // 邮箱
+      { wch: 20 }, // 企业/学校
+      { wch: 20 }, // 身份证号
+      { wch: 20 }, // 随行人员
+      { wch: 10 }, // 状态
+      { wch: 22 }, // 申请时间
+      { wch: 22 }, // 审核时间
+      { wch: 12 }  // 审核员
+    ]
+    ws['!cols'] = colWidths
+
+    // 创建工作簿
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, '邀请函申请')
+
+    // 生成文件名
+    const statusText = filter === 'all' ? '全部' :
+                       filter === 'PENDING' ? '待审核' :
+                       filter === 'APPROVED' ? '已通过' : '已拒绝'
+    const fileName = `模玩展邀请函_${statusText}_${new Date().toLocaleDateString('zh-CN')}.xlsx`
+
+    // 导出文件
+    XLSX.writeFile(wb, fileName)
+  }
+
   const filteredTickets = filter === 'all' ? tickets : tickets.filter(t => t.status === filter)
   const pendingCount = tickets.filter(t => t.status === 'PENDING').length
 
@@ -194,6 +248,20 @@ function AdminPageContent() {
             >
               已拒绝
             </button>
+          </div>
+
+          {/* 导出按钮 */}
+          <div className="flex items-center gap-3 mt-4 pt-4 border-t border-gray-200">
+            <button
+              onClick={exportToExcel}
+              className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition"
+            >
+              <span>📊</span>
+              <span>导出Excel</span>
+            </button>
+            <span className="text-sm text-gray-500">
+              共 {filteredTickets.length} 条记录
+            </span>
           </div>
 
           {/* 审核员姓名 */}
